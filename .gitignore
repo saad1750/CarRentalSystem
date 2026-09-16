@@ -1,0 +1,8 @@
+bin/
+obj/
+.idea/
+.vs/
+*.user
+
+# Generated when CarRental.Shared is built (GeneratePackageOnBuild) — not source, don't commit.
+local-nuget-feed/
