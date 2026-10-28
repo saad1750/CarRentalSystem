@@ -23,11 +23,11 @@ builder.Services.AddHttpClient("NotificationService", client =>
 });
 
 builder.Services.AddSingleton<IBookingService, CarRental.BookingService.Services.BookingService>();
-builder.Services.AddScoped<ICarServiceClient, CarServiceClient>();
-builder.Services.AddScoped<IUserServiceClient, UserServiceClient>();
+builder.Services.AddSingleton<ICarServiceClient, CarServiceClient>();
+builder.Services.AddSingleton<IUserServiceClient, UserServiceClient>();
 
 // MIDLERTIDIG: kalder Notification Service over REST — skift til rigtig messaging senere.
-builder.Services.AddScoped<IEventPublisher, HttpEventPublisher>();
+builder.Services.AddSingleton<IEventPublisher, HttpEventPublisher>();
 
 var app = builder.Build();
 

@@ -12,7 +12,7 @@ builder.Services.AddHttpClient("BookingService", client =>
 });
 
 builder.Services.AddSingleton<IPaymentService, CarRental.PaymentService.Services.PaymentService>();
-builder.Services.AddScoped<IBookingServiceClient, BookingServiceClient>();
+builder.Services.AddSingleton<IBookingServiceClient, BookingServiceClient>();
 
 var app = builder.Build();
 
