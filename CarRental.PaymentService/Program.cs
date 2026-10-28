@@ -11,7 +11,9 @@ builder.Services.AddHttpClient("BookingService", client =>
     client.BaseAddress = new Uri(builder.Configuration["Services:BookingService"]!);
 });
 
-builder.Services.AddSingleton<IPaymentService, CarRental.PaymentService.Services.PaymentService>();
+// Scoped (ikke Singleton): PaymentService afhænger af den scoped BookingServiceClient.
+// Dataene overlever alligevel mellem requests, fordi Payments-dictionary'en er static.
+builder.Services.AddScoped<IPaymentService, CarRental.PaymentService.Services.PaymentService>();
 builder.Services.AddSingleton<IBookingServiceClient, BookingServiceClient>();
 
 var app = builder.Build();

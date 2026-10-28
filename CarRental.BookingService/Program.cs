@@ -22,7 +22,9 @@ builder.Services.AddHttpClient("NotificationService", client =>
     client.BaseAddress = new Uri(builder.Configuration["Services:NotificationService"]!);
 });
 
-builder.Services.AddSingleton<IBookingService, CarRental.BookingService.Services.BookingService>();
+// Scoped (ikke Singleton): BookingService afhænger af scoped HTTP-klienter.
+// Dataene overlever alligevel mellem requests, fordi Bookings-dictionary'en er static.
+builder.Services.AddScoped<IBookingService, CarRental.BookingService.Services.BookingService>();
 builder.Services.AddSingleton<ICarServiceClient, CarServiceClient>();
 builder.Services.AddSingleton<IUserServiceClient, UserServiceClient>();
 
