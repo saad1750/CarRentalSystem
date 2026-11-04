@@ -1,0 +1,42 @@
+flowchart LR
+  dev(["Udvikler / browser<br/>localhost"])
+
+  subgraph host["Docker host · docker compose · netværk: carrental-net (bridge)"]
+    direction LR
+    us["user-service<br/>:8080 → 6001"]
+    cs["car-service<br/>:8080 → 6002"]
+    bs["booking-service<br/>:8080 → 6003"]
+    ns["notification-service<br/>:8080 → 6004"]
+    ps["payment-service<br/>:8080 → 6005"]
+    mq{{"rabbitmq<br/>5672 · UI 15672"}}
+
+    udb[("user-db<br/>PostgreSQL")]
+    cdb[("car-db<br/>PostgreSQL")]
+    bdb[("booking-db<br/>PostgreSQL")]
+    pdb[("payment-db<br/>PostgreSQL")]
+
+    us --- udb
+    cs --- cdb
+    bs --- bdb
+    ps --- pdb
+
+    bs -- "REST: eligibility" --> us
+    bs -- "REST: availability / reserve" --> cs
+    bs -- "booking-confirmed" --> ns
+    ps -- "REST: confirm / payment-failed" --> bs
+    bs -.-> mq
+    ps -.-> mq
+    mq -.-> ns
+  end
+
+  vols[("Named volumes<br/>user-db-data · car-db-data<br/>booking-db-data · payment-db-data<br/>rabbitmq-data")]
+  udb & cdb & bdb & pdb & mq -.- vols
+
+  env[/".env<br/>porte · passwords · image-tag"/] -.-> host
+  dev --> us & cs & bs & ns & ps
+  dev --> mq
+
+  subgraph ci["CI/CD · GitHub Actions"]
+    gh["push til main"] --> build["docker build<br/>(multi-stage, 1 job pr. service)"] --> reg[("ghcr.io<br/>container registry")]
+  end
+  reg -. "docker compose pull" .-> host
