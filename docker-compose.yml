@@ -1,0 +1,171 @@
+# Car Rental System – udviklingsmiljø
+# Start:  docker compose up -d --build
+# Stop:   docker compose down        (tilføj -v for også at slette databaserne)
+
+name: carrental
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  networks: [carrental-net]
+  environment: &service-env
+    ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+    ASPNETCORE_URLS: http://+:8080
+
+x-db-defaults: &db-defaults
+  image: postgres:16-alpine
+  restart: unless-stopped
+  networks: [carrental-net]
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+    interval: 5s
+    timeout: 3s
+    retries: 10
+
+services:
+
+  # ===================== Microservices =====================
+
+  user-service:
+    <<: *service-defaults
+    image: ${IMAGE_REGISTRY}/user-service:${IMAGE_TAG}
+    build: { context: ., dockerfile: CarRental.UserService/Dockerfile }
+    environment:
+      <<: *service-env
+      ConnectionStrings__Default: Host=user-db;Database=${USER_DB_NAME};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: ${RABBITMQ_USER}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
+    ports: ["${USER_SERVICE_PORT}:8080"]
+    depends_on:
+      user-db: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  car-service:
+    <<: *service-defaults
+    image: ${IMAGE_REGISTRY}/car-service:${IMAGE_TAG}
+    build: { context: ., dockerfile: CarRental.CarService/Dockerfile }
+    environment:
+      <<: *service-env
+      ConnectionStrings__Default: Host=car-db;Database=${CAR_DB_NAME};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: ${RABBITMQ_USER}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
+    ports: ["${CAR_SERVICE_PORT}:8080"]
+    depends_on:
+      car-db: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  booking-service:
+    <<: *service-defaults
+    image: ${IMAGE_REGISTRY}/booking-service:${IMAGE_TAG}
+    build: { context: ., dockerfile: CarRental.BookingService/Dockerfile }
+    environment:
+      <<: *service-env
+      ConnectionStrings__Default: Host=booking-db;Database=${BOOKING_DB_NAME};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: ${RABBITMQ_USER}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
+      # Overskriver "Services:*" i appsettings.json – Docker DNS bruger servicenavne
+      Services__CarService: http://car-service:8080
+      Services__UserService: http://user-service:8080
+      Services__NotificationService: http://notification-service:8080
+    ports: ["${BOOKING_SERVICE_PORT}:8080"]
+    depends_on:
+      booking-db: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      car-service: { condition: service_started }
+      user-service: { condition: service_started }
+      notification-service: { condition: service_started }
+
+  payment-service:
+    <<: *service-defaults
+    image: ${IMAGE_REGISTRY}/payment-service:${IMAGE_TAG}
+    build: { context: ., dockerfile: CarRental.PaymentService/Dockerfile }
+    environment:
+      <<: *service-env
+      ConnectionStrings__Default: Host=payment-db;Database=${PAYMENT_DB_NAME};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: ${RABBITMQ_USER}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
+      Services__BookingService: http://booking-service:8080
+    ports: ["${PAYMENT_SERVICE_PORT}:8080"]
+    depends_on:
+      payment-db: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      booking-service: { condition: service_started }
+
+  # Ingen egen database – by design
+  notification-service:
+    <<: *service-defaults
+    image: ${IMAGE_REGISTRY}/notification-service:${IMAGE_TAG}
+    build: { context: ., dockerfile: CarRental.NotificationService/Dockerfile }
+    environment:
+      <<: *service-env
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__Username: ${RABBITMQ_USER}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
+    ports: ["${NOTIFICATION_SERVICE_PORT}:8080"]
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+
+  # ===================== Databaser (én pr. service) =====================
+
+  user-db:
+    <<: *db-defaults
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${USER_DB_NAME}
+    volumes: [user-db-data:/var/lib/postgresql/data]
+
+  car-db:
+    <<: *db-defaults
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${CAR_DB_NAME}
+    volumes: [car-db-data:/var/lib/postgresql/data]
+
+  booking-db:
+    <<: *db-defaults
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${BOOKING_DB_NAME}
+    volumes: [booking-db-data:/var/lib/postgresql/data]
+
+  payment-db:
+    <<: *db-defaults
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${PAYMENT_DB_NAME}
+    volumes: [payment-db-data:/var/lib/postgresql/data]
+
+  # ===================== Message broker (én instans) =====================
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    networks: [carrental-net]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports: ["${RABBITMQ_UI_PORT}:15672"]   # management-UI i browseren
+    volumes: [rabbitmq-data:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+networks:
+  carrental-net:
+    driver: bridge
+
+volumes:
+  user-db-data:
+  car-db-data:
+  booking-db-data:
+  payment-db-data:
+  rabbitmq-data:

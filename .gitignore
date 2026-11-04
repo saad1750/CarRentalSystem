@@ -6,3 +6,6 @@ obj/
 
 # Generated when CarRental.Shared is built (GeneratePackageOnBuild) — not source, don't commit.
 local-nuget-feed/
+
+# Docker: hemmeligheder ligger i .env (brug .env.example som skabelon)
+.env
