@@ -8,7 +8,7 @@ flowchart LR
     bs["booking-service<br/>:8080 → 6003"]
     ns["notification-service<br/>:8080 → 6004"]
     ps["payment-service<br/>:8080 → 6005"]
-    mq{{"rabbitmq<br/>5672 · UI 15672"}}
+    mq{{"rabbitmq<br/>exchange: carrental.events (topic)<br/>5672 · UI 15672"}}
 
     udb[("user-db<br/>PostgreSQL")]
     cdb[("car-db<br/>PostgreSQL")]
@@ -22,11 +22,10 @@ flowchart LR
 
     bs -- "REST: eligibility" --> us
     bs -- "REST: availability / reserve" --> cs
-    bs -- "booking-confirmed" --> ns
-    ps -- "REST: confirm / payment-failed" --> bs
-    bs -.-> mq
-    ps -.-> mq
-    mq -.-> ns
+    ps == "publish payment.succeeded / payment.failed" ==> mq
+    mq == "payment.*" ==> bs
+    bs == "publish booking.confirmed" ==> mq
+    mq == "booking.confirmed" ==> ns
   end
 
   vols[("Named volumes<br/>user-db-data · car-db-data<br/>booking-db-data · payment-db-data<br/>rabbitmq-data")]

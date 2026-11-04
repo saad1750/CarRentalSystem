@@ -68,14 +68,13 @@ services:
       # Overskriver "Services:*" i appsettings.json – Docker DNS bruger servicenavne
       Services__CarService: http://car-service:8080
       Services__UserService: http://user-service:8080
-      Services__NotificationService: http://notification-service:8080
+      # Notification og Payment nås via RabbitMQ – ingen URL nødvendig
     ports: ["${BOOKING_SERVICE_PORT}:8080"]
     depends_on:
       booking-db: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
       car-service: { condition: service_started }
       user-service: { condition: service_started }
-      notification-service: { condition: service_started }
 
   payment-service:
     <<: *service-defaults
@@ -87,12 +86,11 @@ services:
       RabbitMQ__Host: rabbitmq
       RabbitMQ__Username: ${RABBITMQ_USER}
       RabbitMQ__Password: ${RABBITMQ_PASSWORD}
-      Services__BookingService: http://booking-service:8080
+      # Payment kender ikke Booking Service – resultatet sendes som event via RabbitMQ
     ports: ["${PAYMENT_SERVICE_PORT}:8080"]
     depends_on:
       payment-db: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
-      booking-service: { condition: service_started }
 
   # Ingen egen database – by design
   notification-service:
@@ -151,7 +149,9 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
-    ports: ["${RABBITMQ_UI_PORT}:15672"]   # management-UI i browseren
+    ports:
+      - "${RABBITMQ_UI_PORT}:15672"   # management-UI i browseren
+      - "${RABBITMQ_PORT:-5672}:5672"       # AMQP – så services startet fra Rider også kan forbinde
     volumes: [rabbitmq-data:/var/lib/rabbitmq]
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]

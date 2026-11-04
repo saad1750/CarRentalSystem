@@ -30,7 +30,7 @@ docker compose down           # stop (tilføj -v for at slette DB-data)
 | Booking | http://localhost:6003/swagger |
 | Notification | http://localhost:6004/swagger |
 | Payment | http://localhost:6005/swagger |
-| RabbitMQ UI | http://localhost:15672 (login fra `.env`) |
+| RabbitMQ UI | http://localhost:15672 (login fra `.env`) – se køer under *Queues* |
 
 ## Vigtige designvalg
 
@@ -40,10 +40,22 @@ docker compose down           # stop (tilføj -v for at slette DB-data)
 - **Docker DNS:** `appsettings.json` peger på `https://localhost:500x`. I compose overskrives det med miljøvariabler (`Services__CarService=http://car-service:8080` osv.), så servicenavne bruges i stedet for IP'er.
 - **Databaser og broker** starter med healthchecks, og services venter på dem (`depends_on: condition: service_healthy`).
 
-## Hvad mangler i koden (ikke Docker)
+## RabbitMQ
 
-- Services bruger stadig in-memory storage. Connection strings er klar som `ConnectionStrings__Default` (fx `Host=booking-db;Database=bookingdb;...`), så når I tilføjer EF Core + Npgsql, læses den med `builder.Configuration.GetConnectionString("Default")`.
-- Booking → Notification går stadig over REST (`HttpEventPublisher`). RabbitMQ kører og får `RabbitMQ__Host/Username/Password` som env, klar til at erstatte `HttpEventPublisher` og aktivere `BookingConfirmedConsumer`.
+| Event (routing key) | Publiceres af | Kø | Consumer |
+|---|---|---|---|
+| `payment.succeeded` | Payment | `booking-service.payment-events` | Booking → bekræfter booking |
+| `payment.failed` | Payment | `booking-service.payment-events` | Booking → Failed + frigiver bil |
+| `booking.confirmed` | Booking | `notification-service.booking-confirmed` | Notification → email/SMS |
+
+- Alt publiceres til topic-exchangen `carrental.events`. Hver consumer har sin egen durable kø, så nye services kan lytte med uden at ændre afsenderen.
+- Beskeder er persistente og ack'es først efter behandling: er en consumer nede, venter beskederne i køen.
+- Fejler behandlingen, ender beskeden i `carrental.dead-letter` (se den i RabbitMQ-UI'et).
+- Booking → User og Booking → Car er stadig REST, fordi Booking skal bruge svaret med det samme.
+
+## Hvad mangler stadig
+
+- Services bruger in-memory storage. Connection strings er klar som `ConnectionStrings__Default` (fx `Host=booking-db;Database=bookingdb;...`), så når I tilføjer EF Core + Npgsql, læses den med `builder.Configuration.GetConnectionString("Default")`.
 
 ## CI/CD
 

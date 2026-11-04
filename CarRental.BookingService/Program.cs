@@ -1,3 +1,4 @@
+using CarRental.BookingService.Messaging;
 using CarRental.BookingService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,19 +18,17 @@ builder.Services.AddHttpClient("UserService", client =>
     client.BaseAddress = new Uri(builder.Configuration["Services:UserService"]!);
 });
 
-builder.Services.AddHttpClient("NotificationService", client =>
-{
-    client.BaseAddress = new Uri(builder.Configuration["Services:NotificationService"]!);
-});
-
 // Scoped (ikke Singleton): BookingService afhænger af scoped HTTP-klienter.
 // Dataene overlever alligevel mellem requests, fordi Bookings-dictionary'en er static.
 builder.Services.AddScoped<IBookingService, CarRental.BookingService.Services.BookingService>();
 builder.Services.AddSingleton<ICarServiceClient, CarServiceClient>();
 builder.Services.AddSingleton<IUserServiceClient, UserServiceClient>();
 
-// MIDLERTIDIG: kalder Notification Service over REST — skift til rigtig messaging senere.
-builder.Services.AddSingleton<IEventPublisher, HttpEventPublisher>();
+// RabbitMQ: asynkron kommunikation med Payment og Notification Service.
+builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection(RabbitMqOptions.SectionName));
+builder.Services.AddSingleton<RabbitMqPublisher>();
+builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();   // booking.confirmed -> Notification
+builder.Services.AddHostedService<PaymentEventsConsumer>();                  // payment.* <- Payment
 
 var app = builder.Build();
 

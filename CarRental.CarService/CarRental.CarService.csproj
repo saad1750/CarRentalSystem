@@ -14,7 +14,7 @@
        nuget.config i roden) i stedet for en ProjectReference, så denne
        service bygger mod en bestemt version af Shared, ikke kildekoden. -->
   <ItemGroup>
-    <PackageReference Include="CarRental.Shared" Version="1.0.0" />
+    <PackageReference Include="CarRental.Shared" Version="1.1.0" />
   </ItemGroup>
 
 </Project>
