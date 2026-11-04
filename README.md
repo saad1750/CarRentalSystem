@@ -69,14 +69,19 @@ Each service is its own ASP.NET Core Web API project so they can run and be depl
 
 All services use in-memory storage (`ConcurrentDictionary`/`List` behind the interfaces) for now, so the whole solution runs without a database. When the database is added, only the class implementing e.g. `IBookingService` needs to change to use an injected EF Core `DbContext` — controllers and interfaces stay the same.
 
-## Cross-service calls (current, temporary REST wiring)
+## Cross-service communication
+
+Synchronous REST (Booking needs the answer before it can continue):
 
 - Booking Service → Car Service: check/reserve/release availability
 - Booking Service → User Service: eligibility check (age 21+, valid licence)
-- Payment Service → Booking Service: confirm booking / report payment failure
-- Booking Service → Notification Service: booking confirmed
 
-These synchronous REST calls between Booking↔Payment↔Notification stand in for what should eventually be **asynchronous messaging** (RabbitMQ/Kafka) — marked `TEMPORARY` in the code (`HttpEventPublisher`, `PaymentEventsController`, `NotificationController`). This is a good discussion point for the "communication styles" and "architectural patterns" sections of the report.
+Asynchronous messaging via RabbitMQ (topic exchange `carrental.events`, see `DOCKER.md`):
+
+- Payment Service → `payment.succeeded` / `payment.failed` → Booking Service (`PaymentEventsConsumer`)
+- Booking Service → `booking.confirmed` → Notification Service (`BookingConfirmedConsumer`)
+
+Payment no longer knows Booking's address, and Booking no longer knows Notification's — they only share event contracts in `CarRental.Shared` (`Events/`, `Messaging/MessagingTopology.cs`). If Notification is down, messages wait in its queue; messages that fail processing go to the `carrental.dead-letter` queue.
 
 ## Requirement → code map
 
@@ -87,13 +92,13 @@ These synchronous REST calls between Booking↔Payment↔Notification stand in f
 - Price per day by car type → `Booking.TotalPrice`, `Car.PricePerDay`
 - Free cancellation ≥48h / 25% fee <48h → `Booking.IsWithinFreeCancellationWindow`, `BookingService.CancelBookingAsync`
 - No cancellation after pickup → `Booking.CanBeCancelled`
-- Payment failure cancels reservation → `PaymentService.ProcessPaymentAsync` → `IBookingServiceClient.NotifyPaymentFailedAsync` → `BookingService.HandlePaymentFailedAsync`
+- Payment failure cancels reservation → `PaymentService.ProcessPaymentAsync` → `payment.failed` event → `PaymentEventsConsumer` → `BookingService.HandlePaymentFailedAsync`
 - Notification retries, never blocks booking → `NotificationService.SendWithRetryAsync`
 - AI recommendation by passengers/price → `CarService.GetAiRecommendationsAsync` (rule-based placeholder — swap for a real model call later)
 
 ## Next steps
 
 1. Add EF Core + a database per service (Code-First from the existing model classes)
-2. Replace the `TEMPORARY` REST calls between Booking/Payment/Notification with real messaging
+2. ~~Replace the `TEMPORARY` REST calls between Booking/Payment/Notification with real messaging~~ (done — RabbitMQ)
 3. Add authentication (JWT) to `AuthController`
 4. Add a frontend project talking to these APIs over REST/GraphQL

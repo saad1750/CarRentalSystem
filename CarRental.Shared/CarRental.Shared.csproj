@@ -17,7 +17,7 @@
   -->
   <PropertyGroup>
     <PackageId>CarRental.Shared</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <!-- Hver build lægger .nupkg-filen direkte i det lokale feed i roden,
          så de andre services kan restore uden en ekstern NuGet-server. -->

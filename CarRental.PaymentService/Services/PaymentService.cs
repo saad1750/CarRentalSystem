@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using CarRental.PaymentService.Models;
 using CarRental.Shared.Enums;
+using CarRental.Shared.Events;
 
 namespace CarRental.PaymentService.Services;
 
@@ -9,11 +10,11 @@ public class PaymentService : IPaymentService
 {
     private static readonly ConcurrentDictionary<Guid, Payment> Payments = new();
 
-    private readonly IBookingServiceClient _bookingServiceClient;
+    private readonly IPaymentEventPublisher _eventPublisher;
 
-    public PaymentService(IBookingServiceClient bookingServiceClient)
+    public PaymentService(IPaymentEventPublisher eventPublisher)
     {
-        _bookingServiceClient = bookingServiceClient;
+        _eventPublisher = eventPublisher;
     }
 
     // Krav: betaling online. Idempotent — samme booking betales aldrig to gange.
@@ -40,11 +41,22 @@ public class PaymentService : IPaymentService
 
         Payments[payment.Id] = payment;
 
-        // Krav: fejlet betaling annullerer bookingen.
+        // Resultatet sendes som event via RabbitMQ. Booking Service lytter og
+        // bekræfter bookingen, eller annullerer den hvis betalingen fejlede.
         if (success)
-            await _bookingServiceClient.ConfirmBookingAsync(bookingId);
+            await _eventPublisher.PublishPaymentSucceededAsync(new PaymentSucceededEvent
+            {
+                BookingId = bookingId,
+                PaymentId = payment.Id,
+                Amount = amount
+            });
         else
-            await _bookingServiceClient.NotifyPaymentFailedAsync(bookingId);
+            await _eventPublisher.PublishPaymentFailedAsync(new PaymentFailedEvent
+            {
+                BookingId = bookingId,
+                PaymentId = payment.Id,
+                Reason = payment.FailureReason ?? "Payment failed."
+            });
 
         return payment;
     }

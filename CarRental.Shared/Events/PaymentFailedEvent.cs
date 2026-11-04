@@ -1,8 +1,8 @@
 namespace CarRental.Shared.Events;
 
 // Krav: hvis betaling fejler, annulleres reservationen (saga-kompensation).
-// NB: den nuværende midlertidige REST-løsning sender kun BookingId direkte
-// i stedet for hele denne event — denne klasse er klar til rigtig messaging.
+// Sendes fra Payment Service via RabbitMQ; Booking Service lytter og
+// annullerer bookingen + frigiver bilen.
 public class PaymentFailedEvent
 {
     public Guid BookingId { get; set; }

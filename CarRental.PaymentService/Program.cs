@@ -1,3 +1,4 @@
+using CarRental.PaymentService.Messaging;
 using CarRental.PaymentService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -6,15 +7,13 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddHttpClient("BookingService", client =>
-{
-    client.BaseAddress = new Uri(builder.Configuration["Services:BookingService"]!);
-});
-
-// Scoped (ikke Singleton): PaymentService afhænger af den scoped BookingServiceClient.
-// Dataene overlever alligevel mellem requests, fordi Payments-dictionary'en er static.
+// Dataene overlever mellem requests, fordi Payments-dictionary'en er static.
 builder.Services.AddScoped<IPaymentService, CarRental.PaymentService.Services.PaymentService>();
-builder.Services.AddSingleton<IBookingServiceClient, BookingServiceClient>();
+
+// RabbitMQ: betalingsresultater sendes som events (payment.succeeded / payment.failed).
+builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection(RabbitMqOptions.SectionName));
+builder.Services.AddSingleton<RabbitMqPublisher>();
+builder.Services.AddSingleton<IPaymentEventPublisher, RabbitMqPaymentEventPublisher>();
 
 var app = builder.Build();
 

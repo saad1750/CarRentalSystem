@@ -2,8 +2,9 @@ using CarRental.Shared.Events;
 
 namespace CarRental.BookingService.Services;
 
-// MIDLERTIDIG stand-in til rigtig message broker er sat op.
-// NB: bruges ikke lige nu — HttpEventPublisher er registreret i stedet.
+// Simpel stand-in der kun logger.
+// NB: bruges ikke — RabbitMqEventPublisher er registreret i Program.cs.
+// Kan bruges i tests eller hvis man vil køre uden RabbitMQ.
 public class LoggingEventPublisher : IEventPublisher
 {
     private readonly ILogger<LoggingEventPublisher> _logger;

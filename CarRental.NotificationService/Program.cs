@@ -1,3 +1,5 @@
+using CarRental.NotificationService.Consumers;
+using CarRental.NotificationService.Messaging;
 using CarRental.NotificationService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -10,6 +12,10 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<INotificationService, NotificationService>();
 builder.Services.AddSingleton<INotificationSender, EmailNotificationSender>();
 builder.Services.AddSingleton<INotificationSender, SmsNotificationSender>();
+
+// RabbitMQ: modtager "booking.confirmed" fra Booking Service.
+builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection(RabbitMqOptions.SectionName));
+builder.Services.AddHostedService<BookingConfirmedConsumer>();
 
 var app = builder.Build();
 
