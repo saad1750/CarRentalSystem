@@ -14,6 +14,16 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CarRental.PaymentService", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CarRental.NotificationService", "CarRental.NotificationService\CarRental.NotificationService.csproj", "{BE43D537-E5E9-4B1B-9B9E-F7A4E5A16FF8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CarRental.BookingService.Tests", "CarRental.BookingService.Tests\CarRental.BookingService.Tests.csproj", "{DBF3621F-5067-4C08-8DC7-89507BA7706A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CarRental.UserService.Tests", "CarRental.UserService.Tests\CarRental.UserService.Tests.csproj", "{C8F16A51-D777-4A71-A49C-9A648B25EFDE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CarRental.CarService.Tests", "CarRental.CarService.Tests\CarRental.CarService.Tests.csproj", "{48030060-9E4E-4E13-9A6E-A87FB6DB79DC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CarRental.PaymentService.Tests", "CarRental.PaymentService.Tests\CarRental.PaymentService.Tests.csproj", "{9C30ECCA-98D8-436E-9B08-4378E9ABB1BE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CarRental.NotificationService.Tests", "CarRental.NotificationService.Tests\CarRental.NotificationService.Tests.csproj", "{63B08C6F-2645-46EC-A034-4DEA989CF8E3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -44,6 +54,26 @@ Global
 		{BE43D537-E5E9-4B1B-9B9E-F7A4E5A16FF8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BE43D537-E5E9-4B1B-9B9E-F7A4E5A16FF8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BE43D537-E5E9-4B1B-9B9E-F7A4E5A16FF8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DBF3621F-5067-4C08-8DC7-89507BA7706A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DBF3621F-5067-4C08-8DC7-89507BA7706A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DBF3621F-5067-4C08-8DC7-89507BA7706A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DBF3621F-5067-4C08-8DC7-89507BA7706A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C8F16A51-D777-4A71-A49C-9A648B25EFDE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C8F16A51-D777-4A71-A49C-9A648B25EFDE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C8F16A51-D777-4A71-A49C-9A648B25EFDE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C8F16A51-D777-4A71-A49C-9A648B25EFDE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{48030060-9E4E-4E13-9A6E-A87FB6DB79DC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{48030060-9E4E-4E13-9A6E-A87FB6DB79DC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{48030060-9E4E-4E13-9A6E-A87FB6DB79DC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{48030060-9E4E-4E13-9A6E-A87FB6DB79DC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9C30ECCA-98D8-436E-9B08-4378E9ABB1BE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9C30ECCA-98D8-436E-9B08-4378E9ABB1BE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9C30ECCA-98D8-436E-9B08-4378E9ABB1BE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9C30ECCA-98D8-436E-9B08-4378E9ABB1BE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{63B08C6F-2645-46EC-A034-4DEA989CF8E3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{63B08C6F-2645-46EC-A034-4DEA989CF8E3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{63B08C6F-2645-46EC-A034-4DEA989CF8E3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{63B08C6F-2645-46EC-A034-4DEA989CF8E3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
