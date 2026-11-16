@@ -18,5 +18,8 @@
   <ItemGroup>
     <PackageReference Include="CarRental.Shared" Version="2.0.0" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CarRental.Shared\CarRental.Shared.csproj" />
+  </ItemGroup>
 
 </Project>

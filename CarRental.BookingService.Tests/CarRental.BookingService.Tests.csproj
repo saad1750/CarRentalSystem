@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CarRental.BookingService\CarRental.BookingService.csproj" />
+    <ProjectReference Include="..\CarRental.Shared\CarRental.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>
