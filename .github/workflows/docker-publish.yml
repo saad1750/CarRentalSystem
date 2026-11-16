@@ -16,7 +16,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   test:
@@ -48,3 +47,70 @@ jobs:
           --logger "trx"
           --logger "console;verbosity=normal"
           --results-directory TestResults
+
+      # Gem testresultaterne, så de kan hentes under "Artifacts" på workflow-kørslen.
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+
+  build:
+    needs: test            # kører kun hvis alle tests er grønne
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write      # kun build-jobbet må skrive til ghcr.io
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: user-service
+            project: CarRental.UserService
+          - name: car-service
+            project: CarRental.CarService
+          - name: booking-service
+            project: CarRental.BookingService
+          - name: payment-service
+            project: CarRental.PaymentService
+          - name: notification-service
+            project: CarRental.NotificationService
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lowercase image prefix
+        # ghcr.io kræver små bogstaver i image-navne
+        run: echo "IMAGE_PREFIX=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/${{ matrix.name }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=
+            type=ref,event=pr
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.project }}/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
