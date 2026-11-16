@@ -56,18 +56,22 @@ after cloning.
 
 | Project | Port (HTTPS) | Own database |
 |---|---|---|
-| CarRental.UserService | 5001 | Yes (later) |
-| CarRental.CarService | 5002 | Yes (later) |
-| CarRental.BookingService | 5003 | Yes (later) |
+| CarRental.UserService | 5001 | Yes — PostgreSQL `userdb` |
+| CarRental.CarService | 5002 | Yes — PostgreSQL `cardb` |
+| CarRental.BookingService | 5003 | Yes — PostgreSQL `bookingdb` |
 | CarRental.NotificationService | 5004 | No — by design |
-| CarRental.PaymentService | 5005 | Yes (later) |
+| CarRental.PaymentService | 5005 | Yes — PostgreSQL `paymentdb` |
 | CarRental.Shared | — (NuGet package, not a runnable service) | — |
 
 Each service is its own ASP.NET Core Web API project so they can run and be deployed independently. Swagger is enabled in Development at `/swagger` on each service's port.
 
-## Current storage
+## Storage
 
-All services use in-memory storage (`ConcurrentDictionary`/`List` behind the interfaces) for now, so the whole solution runs without a database. When the database is added, only the class implementing e.g. `IBookingService` needs to change to use an injected EF Core `DbContext` — controllers and interfaces stay the same.
+User, Car, Booking and Payment each own a PostgreSQL database, accessed with EF Core (`Data/*DbContext.cs` in each service). No service touches another service's database — cross-service ids (e.g. `Booking.CarId`) are plain columns without foreign keys.
+
+- **Configuration:** connection string from `ConnectionStrings:Default`. `appsettings.json` points at the database containers' host ports (5433–5436), so a service started from Rider uses the databases from `docker compose`. Inside Docker, compose overrides it with `ConnectionStrings__Default`.
+- **Initialisation:** on startup each service creates its schema (`Data/DatabaseInitializer.cs`) and, when `Database:SeedTestData` is true, inserts test data (`Data/*SeedData.cs`) — see "Testdata" in `DOCKER.md`.
+- **Schema changes:** `EnsureCreated` does not update an existing schema. After changing a model, reset the databases with `docker compose down -v`. EF Core Migrations replace this before deployment.
 
 ## Cross-service communication
 
@@ -86,8 +90,11 @@ Payment no longer knows Booking's address, and Booking no longer knows Notificat
 ## Requirement → code map
 
 - Age 21+ / valid licence → `Customer.IsEligibleToRent` (UserService), checked via `IUserServiceClient` before booking
-- Real-time availability / no double booking → `CarService.TryReserveAsync` (atomic per-car lock; becomes an EF Core concurrency token later)
+- Real-time availability / no double booking → `CarService.TryReserveAsync` (one atomic `UPDATE ... WHERE Status = 'Available'` in PostgreSQL — safe across several Car Service instances)
 - First-completed-reservation-wins → same atomic reservation in `CarService`
+- Car updates don't overwrite each other → `Car.Version` mapped to PostgreSQL `xmin` (optimistic concurrency)
+- No duplicate payments → unique partial index (one `Succeeded` payment per booking) in `PaymentDbContext`
+- Duplicate RabbitMQ deliveries are harmless → `BookingService.ConfirmBookingAsync` / `HandlePaymentFailedAsync` are idempotent
 - Duplicate booking check → `BookingService.HasOverlappingBookingAsync`
 - Price per day by car type → `Booking.TotalPrice`, `Car.PricePerDay`
 - Free cancellation ≥48h / 25% fee <48h → `Booking.IsWithinFreeCancellationWindow`, `BookingService.CancelBookingAsync`
@@ -98,7 +105,7 @@ Payment no longer knows Booking's address, and Booking no longer knows Notificat
 
 ## Next steps
 
-1. Add EF Core + a database per service (Code-First from the existing model classes)
+1. ~~Add EF Core + a database per service~~ (done — PostgreSQL; switch `EnsureCreated` to EF Core Migrations before deployment)
 2. ~~Replace the `TEMPORARY` REST calls between Booking/Payment/Notification with real messaging~~ (done — RabbitMQ)
 3. Add authentication (JWT) to `AuthController`
 4. Add a frontend project talking to these APIs over REST/GraphQL

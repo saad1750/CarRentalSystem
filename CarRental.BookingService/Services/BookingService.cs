@@ -1,24 +1,26 @@
-using System.Collections.Concurrent;
+using CarRental.BookingService.Data;
 using CarRental.BookingService.Models;
 using CarRental.Shared.Enums;
 using CarRental.Shared.Events;
+using Microsoft.EntityFrameworkCore;
 
 namespace CarRental.BookingService.Services;
 
-// NB: gemmer i memory for nu — skiftes til EF Core-database senere.
+// Gemmer bookinger i PostgreSQL via EF Core (BookingDbContext).
 public class BookingService : IBookingService
 {
-    private static readonly ConcurrentDictionary<Guid, Booking> Bookings = new();
-
+    private readonly BookingDbContext _db;
     private readonly ICarServiceClient _carServiceClient;
     private readonly IUserServiceClient _userServiceClient;
     private readonly IEventPublisher _eventPublisher;
 
     public BookingService(
+        BookingDbContext db,
         ICarServiceClient carServiceClient,
         IUserServiceClient userServiceClient,
         IEventPublisher eventPublisher)
     {
+        _db = db;
         _carServiceClient = carServiceClient;
         _userServiceClient = userServiceClient;
         _eventPublisher = eventPublisher;
@@ -60,39 +62,46 @@ public class BookingService : IBookingService
             Status = BookingStatus.Pending
         };
 
-        Bookings[booking.Id] = booking;
+        _db.Bookings.Add(booking);
+        await _db.SaveChangesAsync();
         return new BookingResult(true, null, booking);
     }
 
     // Krav: tjek om booking allerede findes (overlap på samme bil).
     public Task<bool> HasOverlappingBookingAsync(Guid customerId, Guid carId, DateTime startDate, DateTime endDate)
     {
-        var overlaps = Bookings.Values.Any(b =>
+        return _db.Bookings.AnyAsync(b =>
             b.CarId == carId &&
-            b.Status is BookingStatus.Pending or BookingStatus.Confirmed or BookingStatus.PickedUp &&
+            (b.Status == BookingStatus.Pending || b.Status == BookingStatus.Confirmed || b.Status == BookingStatus.PickedUp) &&
             startDate < b.EndDate && endDate > b.StartDate);
-
-        return Task.FromResult(overlaps);
     }
 
     // Krav: booking-historik.
     public Task<List<Booking>> GetBookingHistoryAsync(Guid customerId)
     {
-        var history = Bookings.Values
+        return _db.Bookings.AsNoTracking()
             .Where(b => b.CustomerId == customerId)
             .OrderByDescending(b => b.CreatedAt)
-            .ToList();
-
-        return Task.FromResult(history);
+            .ToListAsync();
     }
 
     // Kaldes efter vellykket betaling.
+    // Idempotent: RabbitMQ leverer "mindst én gang", så samme payment.succeeded kan komme
+    // to gange. En allerede bekræftet booking bekræftes ikke igen (og sender ikke en ny mail).
     public async Task<BookingResult> ConfirmBookingAsync(Guid bookingId)
     {
-        if (!Bookings.TryGetValue(bookingId, out var booking))
+        var booking = await _db.Bookings.FirstOrDefaultAsync(b => b.Id == bookingId);
+        if (booking is null)
             return new BookingResult(false, "Booking not found.", null);
 
+        if (booking.Status == BookingStatus.Confirmed)
+            return new BookingResult(true, null, booking);
+
+        if (booking.Status != BookingStatus.Pending)
+            return new BookingResult(false, $"Booking cannot be confirmed in status {booking.Status}.", null);
+
         booking.Status = BookingStatus.Confirmed;
+        await _db.SaveChangesAsync();
 
         // Krav: bekræftelse sendes asynkront, Notification Service-fejl må ikke ramme bookingen.
         await _eventPublisher.PublishBookingConfirmedAsync(new BookingConfirmedEvent
@@ -109,13 +118,16 @@ public class BookingService : IBookingService
     }
 
     // Krav: fejlet betaling annullerer reservationen.
+    // Idempotent: kun en ventende booking kan fejle, så bilen frigives højst én gang.
     public async Task HandlePaymentFailedAsync(Guid bookingId)
     {
-        if (!Bookings.TryGetValue(bookingId, out var booking))
+        var booking = await _db.Bookings.FirstOrDefaultAsync(b => b.Id == bookingId);
+        if (booking is null || booking.Status != BookingStatus.Pending)
             return;
 
         booking.Status = BookingStatus.Failed;
         booking.CancelledAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
 
         await _carServiceClient.ReleaseAsync(booking.CarId);
     }
@@ -124,7 +136,8 @@ public class BookingService : IBookingService
     // og ingen annullering efter afhentning.
     public async Task<BookingResult> CancelBookingAsync(Guid bookingId)
     {
-        if (!Bookings.TryGetValue(bookingId, out var booking))
+        var booking = await _db.Bookings.FirstOrDefaultAsync(b => b.Id == bookingId);
+        if (booking is null)
             return new BookingResult(false, "Booking not found.", null);
 
         if (!booking.CanBeCancelled)
@@ -144,6 +157,7 @@ public class BookingService : IBookingService
         }
 
         booking.CancelledAt = now;
+        await _db.SaveChangesAsync();
 
         await _carServiceClient.ReleaseAsync(booking.CarId);
 
@@ -151,28 +165,32 @@ public class BookingService : IBookingService
     }
 
     // Personale: bekræft afhentning.
-    public Task<BookingResult> ConfirmPickupAsync(Guid bookingId)
+    public async Task<BookingResult> ConfirmPickupAsync(Guid bookingId)
     {
-        if (!Bookings.TryGetValue(bookingId, out var booking))
-            return Task.FromResult(new BookingResult(false, "Booking not found.", null));
+        var booking = await _db.Bookings.FirstOrDefaultAsync(b => b.Id == bookingId);
+        if (booking is null)
+            return new BookingResult(false, "Booking not found.", null);
 
         if (booking.Status != BookingStatus.Confirmed)
-            return Task.FromResult(new BookingResult(false, "Only a confirmed booking can be picked up.", null));
+            return new BookingResult(false, "Only a confirmed booking can be picked up.", null);
 
         booking.Status = BookingStatus.PickedUp;
-        return Task.FromResult(new BookingResult(true, null, booking));
+        await _db.SaveChangesAsync();
+        return new BookingResult(true, null, booking);
     }
 
     // Personale: registrer aflevering.
     public async Task<BookingResult> RegisterReturnAsync(Guid bookingId)
     {
-        if (!Bookings.TryGetValue(bookingId, out var booking))
+        var booking = await _db.Bookings.FirstOrDefaultAsync(b => b.Id == bookingId);
+        if (booking is null)
             return new BookingResult(false, "Booking not found.", null);
 
         if (booking.Status != BookingStatus.PickedUp)
             return new BookingResult(false, "Only a picked-up booking can be returned.", null);
 
         booking.Status = BookingStatus.Completed;
+        await _db.SaveChangesAsync();
         await _carServiceClient.ReleaseAsync(booking.CarId);
 
         return new BookingResult(true, null, booking);

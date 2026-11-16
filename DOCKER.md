@@ -53,9 +53,60 @@ docker compose down           # stop (tilføj -v for at slette DB-data)
 - Fejler behandlingen, ender beskeden i `carrental.dead-letter` (se den i RabbitMQ-UI'et).
 - Booking → User og Booking → Car er stadig REST, fordi Booking skal bruge svaret med det samme.
 
-## Hvad mangler stadig
+## Databaser
 
-- Services bruger in-memory storage. Connection strings er klar som `ConnectionStrings__Default` (fx `Host=booking-db;Database=bookingdb;...`), så når I tilføjer EF Core + Npgsql, læses den med `builder.Configuration.GetConnectionString("Default")`.
+| Service | Database | Container | Port på host (fra Rider / DB-værktøj) |
+|---|---|---|---|
+| User | `userdb` | `user-db` | `localhost:5433` |
+| Car | `cardb` | `car-db` | `localhost:5434` |
+| Booking | `bookingdb` | `booking-db` | `localhost:5435` |
+| Payment | `paymentdb` | `payment-db` | `localhost:5436` |
+
+Login: `carrental` / `skift-mig` (fra `.env`). Ved opstart opretter hver service selv sine tabeller og, hvis `SEED_TEST_DATA=true`, testdataene nedenfor. Data ligger i named volumes og overlever `docker compose down`.
+
+**Nulstil alt (fx efter ændring i en model-klasse):**
+```bash
+docker compose down -v      # sletter også databaserne
+docker compose up -d --build
+```
+
+**Kør én service fra Rider mod resten i Docker:** stop den i Docker (`docker compose stop car-service`) og start den fra Rider. `appsettings.json` peger allerede på databasen via host-porten ovenfor og på RabbitMQ via `localhost:5672`.
+
+## Testdata
+
+Alle brugere har kodeordet **`Test123!`**. Id'erne er faste, så de kan bruges direkte i Swagger.
+
+**Brugere** (User Service)
+
+| Id | Navn | Email | Rolle | Til test af |
+|---|---|---|---|---|
+| `11111111-1111-1111-1111-000000000001` | Anna Jensen | anna@test.dk | Customer | Må leje (har booking-historik) |
+| `11111111-1111-1111-1111-000000000002` | Mikkel Larsen | mikkel@test.dk | Customer | Afvises: under 21 |
+| `11111111-1111-1111-1111-000000000003` | Sara Nielsen | sara@test.dk | Customer | Afvises: udløbet kørekort |
+| `11111111-1111-1111-1111-000000000100` | Admin Bruger | admin@carrental.dk | Admin | |
+| `11111111-1111-1111-1111-000000000200` | Jonas Medarbejder | employee@carrental.dk | Employee | |
+
+**Biler** (Car Service) – alle i København
+
+| Id | Bil | Type | Pladser | Pris/dag | Status |
+|---|---|---|---|---|---|
+| `22222222-2222-2222-2222-000000000001` | Toyota Yaris | Economy | 4 | 299 | Available |
+| `22222222-2222-2222-2222-000000000002` | Volkswagen Golf | Compact | 5 | 399 | Available |
+| `22222222-2222-2222-2222-000000000003` | Skoda Octavia Combi | Compact | 5 | 449 | Available |
+| `22222222-2222-2222-2222-000000000004` | Kia Sportage | SUV | 5 | 599 | Available |
+| `22222222-2222-2222-2222-000000000005` | Volvo XC90 | SUV | 7 | 899 | Available |
+| `22222222-2222-2222-2222-000000000006` | Mercedes-Benz E-Class | Luxury | 5 | 1199 | Available |
+| `22222222-2222-2222-2222-000000000007` | Tesla Model 3 | Luxury | 5 | 999 | InMaintenance (kan ikke bookes) |
+| `22222222-2222-2222-2222-000000000008` | Ford Transit Kombi | Van | 9 | 799 | Available |
+
+**Bookinger og betalinger** (Annas historik)
+
+| Id | Bil | Periode | Status | Betaling |
+|---|---|---|---|---|
+| `33333333-3333-3333-3333-000000000001` | VW Golf | 1.–4. okt. 2026 | Completed | `44444444-4444-4444-4444-000000000001` (1.197 kr, Succeeded) |
+| `33333333-3333-3333-3333-000000000002` | Kia Sportage | 15.–17. okt. 2026 | CancelledFree | – |
+
+**Hurtig test i Swagger:** book `POST /api/booking` (port 6003) med Annas id og Toyota Yaris, og betal med `POST /api/payment` (port 6005). Prøv samme bil med Mikkel eller Sara, eller Teslaen, for at se reglerne afvise.
 
 ## CI/CD
 

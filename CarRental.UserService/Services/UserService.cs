@@ -1,64 +1,72 @@
 using System.Security.Cryptography;
 using System.Text;
 using CarRental.Shared.DTOs;
+using CarRental.UserService.Data;
 using CarRental.UserService.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace CarRental.UserService.Services;
 
-// NB: gemmer i memory for nu — skiftes til EF Core-database senere,
-// uden at IUserService-interfacet skal ændres.
+// Gemmer brugere i PostgreSQL via EF Core (UserDbContext).
 public class UserService : IUserService
 {
-    private static readonly List<Customer> Customers = new();
-    private static readonly List<Admin> Admins = new();
-    private static readonly List<Employee> Employees = new();
+    private readonly UserDbContext _db;
+
+    public UserService(UserDbContext db)
+    {
+        _db = db;
+    }
 
     // Krav: registrering.
-    public Task<Customer?> RegisterCustomerAsync(Customer customer, string plainTextPassword)
+    public async Task<Customer?> RegisterCustomerAsync(Customer customer, string plainTextPassword)
     {
-        if (Customers.Any(c => c.Email == customer.Email))
-            return Task.FromResult<Customer?>(null); // email allerede i brug
+        if (await _db.Users.AnyAsync(u => u.Email == customer.Email))
+            return null; // email allerede i brug
 
         customer.PasswordHash = HashPassword(plainTextPassword);
-        Customers.Add(customer);
-        return Task.FromResult<Customer?>(customer);
+        _db.Customers.Add(customer);
+
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // To samtidige registreringer med samme email: det unikke index i databasen
+            // afviser den ene, selvom begge nåede forbi tjekket ovenfor.
+            return null;
+        }
+
+        return customer;
     }
 
-    // Krav: login — tjekker alle tre rolle-lister.
-    public Task<User?> LoginAsync(string email, string plainTextPassword)
+    // Krav: login – én tabel for alle roller, så ét opslag er nok.
+    public async Task<User?> LoginAsync(string email, string plainTextPassword)
     {
         var hash = HashPassword(plainTextPassword);
-
-        User? user = Customers.FirstOrDefault(c => c.Email == email && c.PasswordHash == hash)
-                      ?? (User?)Admins.FirstOrDefault(a => a.Email == email && a.PasswordHash == hash)
-                      ?? Employees.FirstOrDefault(e => e.Email == email && e.PasswordHash == hash);
-
-        return Task.FromResult(user);
+        return await _db.Users.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Email == email && u.PasswordHash == hash);
     }
 
-    public Task<Customer?> GetCustomerByIdAsync(Guid customerId)
-    {
-        return Task.FromResult(Customers.FirstOrDefault(c => c.Id == customerId));
-    }
+    public Task<Customer?> GetCustomerByIdAsync(Guid customerId) =>
+        _db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == customerId);
 
-    public Task<List<Customer>> GetAllCustomersAsync()
-    {
-        return Task.FromResult(Customers);
-    }
+    public Task<List<Customer>> GetAllCustomersAsync() =>
+        _db.Customers.AsNoTracking().OrderBy(c => c.FullName).ToListAsync();
 
     // Krav: eligibility-tjek som Booking Service kalder før booking oprettes.
-    public Task<CustomerEligibilityDto> CheckEligibilityAsync(Guid customerId)
+    public async Task<CustomerEligibilityDto> CheckEligibilityAsync(Guid customerId)
     {
-        var customer = Customers.FirstOrDefault(c => c.Id == customerId);
+        var customer = await GetCustomerByIdAsync(customerId);
 
         if (customer is null)
         {
-            return Task.FromResult(new CustomerEligibilityDto
+            return new CustomerEligibilityDto
             {
                 CustomerId = customerId,
                 IsEligible = false,
                 Reason = "Customer not found"
-            });
+            };
         }
 
         if (!customer.IsEligibleToRent)
@@ -67,23 +75,24 @@ public class UserService : IUserService
                 ? "Customer is under 21 years old"
                 : "Customer does not have a valid driver's licence";
 
-            return Task.FromResult(new CustomerEligibilityDto
+            return new CustomerEligibilityDto
             {
                 CustomerId = customerId,
                 IsEligible = false,
                 Reason = reason
-            });
+            };
         }
 
-        return Task.FromResult(new CustomerEligibilityDto
+        return new CustomerEligibilityDto
         {
             CustomerId = customerId,
             IsEligible = true
-        });
+        };
     }
 
     // Midlertidig simpel hashing — skift til ASP.NET Identity/BCrypt før produktion.
-    private static string HashPassword(string password)
+    // internal, så testdata kan bruge samme hashing.
+    internal static string HashPassword(string password)
     {
         var bytes = Encoding.UTF8.GetBytes(password);
         var hash = SHA256.HashData(bytes);

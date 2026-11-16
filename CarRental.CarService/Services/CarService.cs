@@ -1,113 +1,120 @@
-using System.Collections.Concurrent;
+using CarRental.CarService.Data;
 using CarRental.CarService.Models;
 using CarRental.Shared.DTOs;
 using CarRental.Shared.Enums;
+using Microsoft.EntityFrameworkCore;
 
 namespace CarRental.CarService.Services;
 
-// NB: gemmer i memory for nu — skiftes til EF Core-database senere.
+// Gemmer biler i PostgreSQL via EF Core (CarDbContext).
 public class CarService : ICarService
 {
-    private static readonly ConcurrentDictionary<Guid, Car> Cars = new();
+    private readonly CarDbContext _db;
 
-    // Én lock pr. bil, så tjek på uafhængige biler ikke blokerer hinanden,
-    // men samme bil aldrig kan dobbeltbookes.
-    private static readonly ConcurrentDictionary<Guid, object> CarLocks = new();
+    public CarService(CarDbContext db)
+    {
+        _db = db;
+    }
 
     // Krav: søgning/filtrering på lokation, dato, biltype.
     public Task<List<Car>> SearchAsync(string? location, CarType? type, DateTime? startDate, DateTime? endDate)
     {
-        var query = Cars.Values.Where(c => c.Status == CarAvailabilityStatus.Available);
+        var query = _db.Cars.AsNoTracking().Where(c => c.Status == CarAvailabilityStatus.Available);
 
         if (!string.IsNullOrWhiteSpace(location))
-            query = query.Where(c => c.Location.Equals(location, StringComparison.OrdinalIgnoreCase));
+        {
+            var normalized = location.Trim().ToLower();
+            query = query.Where(c => c.Location.ToLower() == normalized);
+        }
 
         if (type.HasValue)
             query = query.Where(c => c.Type == type.Value);
 
         // start/slut-dato tjekkes ikke her endnu — det kræver et kald til Booking Service.
 
-        return Task.FromResult(query.ToList());
+        return query.OrderBy(c => c.PricePerDay).ToListAsync();
     }
 
     // Krav: admin kan tilføje/opdatere/fjerne biler.
-    public Task<Car> AddCarAsync(Car car)
+    public async Task<Car> AddCarAsync(Car car)
     {
-        Cars[car.Id] = car;
-        return Task.FromResult(car);
+        if (car.Id == Guid.Empty)
+            car.Id = Guid.NewGuid();
+
+        _db.Cars.Add(car);
+        await _db.SaveChangesAsync();
+        return car;
     }
 
-    public Task<Car?> UpdateCarAsync(Car car)
+    public async Task<Car?> UpdateCarAsync(Car car)
     {
-        if (!Cars.ContainsKey(car.Id))
-            return Task.FromResult<Car?>(null);
+        var existing = await _db.Cars.FirstOrDefaultAsync(c => c.Id == car.Id);
+        if (existing is null)
+            return null;
 
-        Cars[car.Id] = car;
-        return Task.FromResult<Car?>(car);
+        // Kopiér felterne over på den indlæste bil. Så bruger concurrency-tjekket
+        // databasens version og ikke det, klienten sendte.
+        existing.Make = car.Make;
+        existing.Model = car.Model;
+        existing.Type = car.Type;
+        existing.PassengerCapacity = car.PassengerCapacity;
+        existing.PricePerDay = car.PricePerDay;
+        existing.Location = car.Location;
+        existing.Status = car.Status;
+
+        await _db.SaveChangesAsync(); // DbUpdateConcurrencyException hvis bilen er ændret imens
+        return existing;
     }
 
-    public Task<bool> RemoveCarAsync(Guid carId)
+    public async Task<bool> RemoveCarAsync(Guid carId)
     {
-        return Task.FromResult(Cars.TryRemove(carId, out _));
+        var deleted = await _db.Cars.Where(c => c.Id == carId).ExecuteDeleteAsync();
+        return deleted > 0;
     }
 
     // Krav: realtidstjek af tilgængelighed.
-    public Task<CarAvailabilityResponseDto> CheckAvailabilityAsync(CarAvailabilityRequestDto request)
+    public async Task<CarAvailabilityResponseDto> CheckAvailabilityAsync(CarAvailabilityRequestDto request)
     {
-        Cars.TryGetValue(request.CarId, out var car);
+        var car = await _db.Cars.AsNoTracking().FirstOrDefaultAsync(c => c.Id == request.CarId);
 
-        return Task.FromResult(new CarAvailabilityResponseDto
+        return new CarAvailabilityResponseDto
         {
             CarId = request.CarId,
             IsAvailable = car is not null && car.Status == CarAvailabilityStatus.Available,
             PricePerDay = car?.PricePerDay ?? 0m
-        });
+        };
     }
 
     // Krav: først-til-mølle, aldrig double booking.
-    // Lock + statustjek gør det atomisk, så to samtidige bookinger ikke begge kan vinde.
-    public Task<bool> TryReserveAsync(Guid carId)
+    // Én atomisk UPDATE ... WHERE Status = 'Available' i databasen: kun den første
+    // af to samtidige forespørgsler ændrer rækken, den anden rammer 0 rækker.
+    // Virker også når der kører flere instanser af Car Service.
+    public async Task<bool> TryReserveAsync(Guid carId)
     {
-        if (!Cars.TryGetValue(carId, out var car))
-            return Task.FromResult(false);
+        var updated = await _db.Cars
+            .Where(c => c.Id == carId && c.Status == CarAvailabilityStatus.Available)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.Status, CarAvailabilityStatus.Reserved));
 
-        var carLock = CarLocks.GetOrAdd(carId, _ => new object());
-
-        lock (carLock)
-        {
-            if (car.Status != CarAvailabilityStatus.Available)
-                return Task.FromResult(false); // en anden nåede det først
-
-            car.Status = CarAvailabilityStatus.Reserved;
-            return Task.FromResult(true);
-        }
+        return updated == 1;
     }
 
     // Kaldes af Booking Service ved annullering, fejlet betaling eller aflevering.
-    public Task ReleaseAsync(Guid carId)
+    // Biler på værksted røres ikke.
+    public async Task ReleaseAsync(Guid carId)
     {
-        if (Cars.TryGetValue(carId, out var car))
-        {
-            var carLock = CarLocks.GetOrAdd(carId, _ => new object());
-            lock (carLock)
-            {
-                car.Status = CarAvailabilityStatus.Available;
-            }
-        }
-
-        return Task.CompletedTask;
+        await _db.Cars
+            .Where(c => c.Id == carId && c.Status != CarAvailabilityStatus.InMaintenance)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.Status, CarAvailabilityStatus.Available));
     }
 
     // Simpel regelbaseret stand-in for AI-anbefalingen — skift senere til rigtigt kald.
     public Task<List<Car>> GetAiRecommendationsAsync(int passengerCount, decimal maxPricePerDay)
     {
-        var recommendations = Cars.Values
+        return _db.Cars.AsNoTracking()
             .Where(c => c.Status == CarAvailabilityStatus.Available)
             .Where(c => c.PassengerCapacity >= passengerCount)
             .Where(c => c.PricePerDay <= maxPricePerDay)
             .OrderBy(c => c.PricePerDay)
-            .ToList();
-
-        return Task.FromResult(recommendations);
+            .ToListAsync();
     }
 }

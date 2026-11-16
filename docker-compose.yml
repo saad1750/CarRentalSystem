@@ -10,6 +10,8 @@ x-service-defaults: &service-defaults
   environment: &service-env
     ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
     ASPNETCORE_URLS: http://+:8080
+    # Opret testdata ved første opstart (se "Testdata" i DOCKER.md). Sæt false i produktion.
+    Database__SeedTestData: ${SEED_TEST_DATA:-true}
 
 x-db-defaults: &db-defaults
   image: postgres:16-alpine
@@ -114,6 +116,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${USER_DB_NAME}
+    ports: ["${USER_DB_PORT:-5433}:5432"]   # så services startet fra Rider kan nå databasen
     volumes: [user-db-data:/var/lib/postgresql/data]
 
   car-db:
@@ -122,6 +125,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${CAR_DB_NAME}
+    ports: ["${CAR_DB_PORT:-5434}:5432"]   # så services startet fra Rider kan nå databasen
     volumes: [car-db-data:/var/lib/postgresql/data]
 
   booking-db:
@@ -130,6 +134,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${BOOKING_DB_NAME}
+    ports: ["${BOOKING_DB_PORT:-5435}:5432"]   # så services startet fra Rider kan nå databasen
     volumes: [booking-db-data:/var/lib/postgresql/data]
 
   payment-db:
@@ -138,6 +143,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${PAYMENT_DB_NAME}
+    ports: ["${PAYMENT_DB_PORT:-5436}:5432"]   # så services startet fra Rider kan nå databasen
     volumes: [payment-db-data:/var/lib/postgresql/data]
 
   # ===================== Message broker (én instans) =====================
