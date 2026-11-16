@@ -4,7 +4,7 @@ namespace CarRental.Shared.DTOs;
 // Krav: kunden skal være 21+ med gyldigt kørekort.
 public class CustomerEligibilityDto
 {
-    public Guid CustomerId { get; set; }
+    public int CustomerId { get; set; }
     public bool IsEligible { get; set; }
 
     // Forklaring når IsEligible er false, vises til kunden.

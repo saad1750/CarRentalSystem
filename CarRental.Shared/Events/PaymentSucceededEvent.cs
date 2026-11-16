@@ -4,7 +4,7 @@ namespace CarRental.Shared.Events;
 // Booking Service lytter og bekræfter bookingen.
 public class PaymentSucceededEvent
 {
-    public Guid BookingId { get; set; }
-    public Guid PaymentId { get; set; }
+    public int BookingId { get; set; }
+    public int PaymentId { get; set; }
     public decimal Amount { get; set; }
 }

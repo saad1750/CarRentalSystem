@@ -48,4 +48,11 @@ public static class DatabaseInitializer
             }
         }
     }
+
+    // Testdata indsættes med faste id'er (1, 2, 3 ...). Bagefter sættes tabellens
+    // id-tæller til det højeste id, så næste række oprettet via API'et får næste tal
+    // i stedet for at prøve at genbruge id 1.
+    public static Task ResetIdSequenceAsync(this DbContext db, string table) =>
+        db.Database.ExecuteSqlRawAsync(
+            $"SELECT setval(pg_get_serial_sequence('{table}', 'Id'), (SELECT COALESCE(MAX(\"Id\"), 1) FROM {table}))");
 }

@@ -47,16 +47,16 @@ public class CarController : ControllerBase
     }
 
     // Kaldes af Booking Service når en booking oprettes.
-    [HttpPost("{carId:guid}/reserve")]
-    public async Task<IActionResult> Reserve(Guid carId)
+    [HttpPost("{carId:int}/reserve")]
+    public async Task<IActionResult> Reserve(int carId)
     {
         var success = await _carService.TryReserveAsync(carId);
         return success ? Ok() : Conflict("Car is no longer available.");
     }
 
     // Kaldes af Booking Service ved annullering eller fejlet betaling.
-    [HttpPost("{carId:guid}/release")]
-    public async Task<IActionResult> Release(Guid carId)
+    [HttpPost("{carId:int}/release")]
+    public async Task<IActionResult> Release(int carId)
     {
         await _carService.ReleaseAsync(carId);
         return Ok();
@@ -72,8 +72,8 @@ public class CarController : ControllerBase
         return CreatedAtAction(nameof(Search), new { id = created.Id }, created);
     }
 
-    [HttpPut("{carId:guid}")]
-    public async Task<IActionResult> UpdateCar(Guid carId, Car car)
+    [HttpPut("{carId:int}")]
+    public async Task<IActionResult> UpdateCar(int carId, Car car)
     {
         if (carId != car.Id)
             return BadRequest("Route id and body id must match.");
@@ -82,8 +82,8 @@ public class CarController : ControllerBase
         return updated is null ? NotFound() : Ok(updated);
     }
 
-    [HttpDelete("{carId:guid}")]
-    public async Task<IActionResult> RemoveCar(Guid carId)
+    [HttpDelete("{carId:int}")]
+    public async Task<IActionResult> RemoveCar(int carId)
     {
         var removed = await _carService.RemoveCarAsync(carId);
         return removed ? NoContent() : NotFound();

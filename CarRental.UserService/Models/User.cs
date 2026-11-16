@@ -6,7 +6,7 @@ namespace CarRental.UserService.Models;
 // Basisklasse for de tre brugertyper (Customer, Admin, Employee).
 public abstract class User
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public int Id { get; set; }
     public string FullName { get; set; } = string.Empty;
 
     // Bruges som login — skal være unik (tjekkes i UserService.RegisterCustomerAsync).

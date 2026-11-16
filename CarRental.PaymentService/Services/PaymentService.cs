@@ -19,7 +19,7 @@ public class PaymentService : IPaymentService
     }
 
     // Krav: betaling online. Idempotent — samme booking betales aldrig to gange.
-    public async Task<Payment> ProcessPaymentAsync(Guid bookingId, decimal amount)
+    public async Task<Payment> ProcessPaymentAsync(int bookingId, decimal amount)
     {
         var existing = await FindSucceededAsync(bookingId);
         if (existing is not null)
@@ -73,7 +73,7 @@ public class PaymentService : IPaymentService
         return payment;
     }
 
-    public Task<Payment?> GetByBookingIdAsync(Guid bookingId)
+    public Task<Payment?> GetByBookingIdAsync(int bookingId)
     {
         return _db.Payments.AsNoTracking()
             .Where(p => p.BookingId == bookingId)
@@ -81,7 +81,7 @@ public class PaymentService : IPaymentService
             .FirstOrDefaultAsync();
     }
 
-    private Task<Payment?> FindSucceededAsync(Guid bookingId) =>
+    private Task<Payment?> FindSucceededAsync(int bookingId) =>
         _db.Payments.AsNoTracking()
             .FirstOrDefaultAsync(p => p.BookingId == bookingId && p.Status == PaymentStatus.Succeeded);
 

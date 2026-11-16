@@ -7,9 +7,9 @@ public interface IUserService
 {
     Task<Customer?> RegisterCustomerAsync(Customer customer, string plainTextPassword);
     Task<User?> LoginAsync(string email, string plainTextPassword);
-    Task<Customer?> GetCustomerByIdAsync(Guid customerId);
+    Task<Customer?> GetCustomerByIdAsync(int customerId);
     Task<List<Customer>> GetAllCustomersAsync();
 
     // Krav: 21+ og gyldigt kørekort — kaldes af Booking Service før en booking oprettes.
-    Task<CustomerEligibilityDto> CheckEligibilityAsync(Guid customerId);
+    Task<CustomerEligibilityDto> CheckEligibilityAsync(int customerId);
 }

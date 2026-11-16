@@ -10,15 +10,15 @@ public interface ICarService
 
     Task<Car> AddCarAsync(Car car);
     Task<Car?> UpdateCarAsync(Car car);
-    Task<bool> RemoveCarAsync(Guid carId);
+    Task<bool> RemoveCarAsync(int carId);
 
     Task<CarAvailabilityResponseDto> CheckAvailabilityAsync(CarAvailabilityRequestDto request);
 
     // Krav: først-til-mølle ved konkurrerende bookinger, aldrig double booking.
     // Sætter status til Reserved atomisk, kun hvis den stadig er Available.
-    Task<bool> TryReserveAsync(Guid carId);
+    Task<bool> TryReserveAsync(int carId);
 
-    Task ReleaseAsync(Guid carId);
+    Task ReleaseAsync(int carId);
 
     // Krav: AI-anbefaling ud fra antal passagerer og prisinterval.
     Task<List<Car>> GetAiRecommendationsAsync(int passengerCount, decimal maxPricePerDay);
