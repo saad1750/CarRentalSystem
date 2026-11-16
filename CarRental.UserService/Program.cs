@@ -1,4 +1,6 @@
+using CarRental.UserService.Data;
 using CarRental.UserService.Services;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,10 +13,19 @@ builder.Services.AddEndpointsApiExplorer();
 // Genererer OpenAPI/Swagger-dokumentationen.
 builder.Services.AddSwaggerGen();
 
-// DI: giv den in-memory implementering når IUserService bliver bedt om.
-builder.Services.AddSingleton<IUserService, UserService>();
+// PostgreSQL via EF Core. Connection string kommer fra "ConnectionStrings:Default"
+// (appsettings.json lokalt, miljøvariablen ConnectionStrings__Default i Docker).
+builder.Services.AddDbContext<UserDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Default"),
+        npgsql => npgsql.EnableRetryOnFailure()));
+
+// Scoped: én DbContext pr. request.
+builder.Services.AddScoped<IUserService, UserService>();
 
 var app = builder.Build();
+
+// Opret tabeller og indsæt testdata (se Data/DatabaseInitializer.cs).
+await app.InitializeDatabaseAsync<UserDbContext>(UserSeedData.SeedAsync);
 
 // Swagger UI vises kun i Development.
 if (app.Environment.IsDevelopment())

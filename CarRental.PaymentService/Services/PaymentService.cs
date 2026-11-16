@@ -1,27 +1,27 @@
-using System.Collections.Concurrent;
+using CarRental.PaymentService.Data;
 using CarRental.PaymentService.Models;
 using CarRental.Shared.Enums;
 using CarRental.Shared.Events;
+using Microsoft.EntityFrameworkCore;
 
 namespace CarRental.PaymentService.Services;
 
-// NB: gemmer i memory for nu — skiftes til EF Core-database senere.
+// Gemmer betalinger i PostgreSQL via EF Core (PaymentDbContext).
 public class PaymentService : IPaymentService
 {
-    private static readonly ConcurrentDictionary<Guid, Payment> Payments = new();
-
+    private readonly PaymentDbContext _db;
     private readonly IPaymentEventPublisher _eventPublisher;
 
-    public PaymentService(IPaymentEventPublisher eventPublisher)
+    public PaymentService(PaymentDbContext db, IPaymentEventPublisher eventPublisher)
     {
+        _db = db;
         _eventPublisher = eventPublisher;
     }
 
     // Krav: betaling online. Idempotent — samme booking betales aldrig to gange.
     public async Task<Payment> ProcessPaymentAsync(Guid bookingId, decimal amount)
     {
-        var existing = Payments.Values.FirstOrDefault(p => p.BookingId == bookingId
-                                                             && p.Status == PaymentStatus.Succeeded);
+        var existing = await FindSucceededAsync(bookingId);
         if (existing is not null)
             return existing;
 
@@ -39,7 +39,19 @@ public class PaymentService : IPaymentService
         if (!success)
             payment.FailureReason = "Simulated gateway decline.";
 
-        Payments[payment.Id] = payment;
+        _db.Payments.Add(payment);
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException) when (success)
+        {
+            // En samtidig forespørgsel nåede at gemme en vellykket betaling for samme
+            // booking først (unikt index). Returnér den i stedet for at lave en dublet.
+            _db.Entry(payment).State = EntityState.Detached;
+            return await FindSucceededAsync(bookingId) ?? throw new InvalidOperationException(
+                $"Duplicate payment rejected for booking {bookingId}, but no succeeded payment was found.");
+        }
 
         // Resultatet sendes som event via RabbitMQ. Booking Service lytter og
         // bekræfter bookingen, eller annullerer den hvis betalingen fejlede.
@@ -63,13 +75,15 @@ public class PaymentService : IPaymentService
 
     public Task<Payment?> GetByBookingIdAsync(Guid bookingId)
     {
-        var payment = Payments.Values
+        return _db.Payments.AsNoTracking()
             .Where(p => p.BookingId == bookingId)
             .OrderByDescending(p => p.CreatedAt)
-            .FirstOrDefault();
-
-        return Task.FromResult(payment);
+            .FirstOrDefaultAsync();
     }
+
+    private Task<Payment?> FindSucceededAsync(Guid bookingId) =>
+        _db.Payments.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.BookingId == bookingId && p.Status == PaymentStatus.Succeeded);
 
     // Simuleret — lykkes altid for nu.
     private static bool SimulateGatewayCall() => true;

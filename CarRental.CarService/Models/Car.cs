@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using CarRental.Shared.Enums;
 
 namespace CarRental.CarService.Models;
@@ -19,6 +20,9 @@ public class Car
     // Flippes atomisk af TryReserveAsync/ReleaseAsync.
     public CarAvailabilityStatus Status { get; set; } = CarAvailabilityStatus.Available;
 
-    // Krav: aldrig double booking — bruges til optimistic concurrency i EF Core senere.
-    public byte[]? RowVersion { get; set; }
+    // Optimistic concurrency: PostgreSQL's systemkolonne "xmin" ændres ved hver
+    // opdatering. Har en anden ændret bilen imellem, afviser EF Core gemningen.
+    // Styres af databasen, derfor ikke en del af API'et.
+    [JsonIgnore]
+    public uint Version { get; set; }
 }

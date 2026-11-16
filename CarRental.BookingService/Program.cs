@@ -1,5 +1,7 @@
+using CarRental.BookingService.Data;
 using CarRental.BookingService.Messaging;
 using CarRental.BookingService.Services;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,8 +20,12 @@ builder.Services.AddHttpClient("UserService", client =>
     client.BaseAddress = new Uri(builder.Configuration["Services:UserService"]!);
 });
 
-// Scoped (ikke Singleton): BookingService afhænger af scoped HTTP-klienter.
-// Dataene overlever alligevel mellem requests, fordi Bookings-dictionary'en er static.
+// PostgreSQL via EF Core. Connection string kommer fra "ConnectionStrings:Default".
+builder.Services.AddDbContext<BookingDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Default"),
+        npgsql => npgsql.EnableRetryOnFailure()));
+
+// Scoped: én DbContext pr. request (og pr. RabbitMQ-besked, se PaymentEventsConsumer).
 builder.Services.AddScoped<IBookingService, CarRental.BookingService.Services.BookingService>();
 builder.Services.AddSingleton<ICarServiceClient, CarServiceClient>();
 builder.Services.AddSingleton<IUserServiceClient, UserServiceClient>();
@@ -31,6 +37,9 @@ builder.Services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();   // b
 builder.Services.AddHostedService<PaymentEventsConsumer>();                  // payment.* <- Payment
 
 var app = builder.Build();
+
+// Opret tabeller og indsæt testdata (se Data/DatabaseInitializer.cs).
+await app.InitializeDatabaseAsync<BookingDbContext>(BookingSeedData.SeedAsync);
 
 if (app.Environment.IsDevelopment())
 {
