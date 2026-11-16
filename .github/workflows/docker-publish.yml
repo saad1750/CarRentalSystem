@@ -1,8 +1,11 @@
-# Bygger et Docker-image pr. microservice og pusher det til
-# GitHub Container Registry (ghcr.io) ved push til main.
-# Pull requests bygges kun (ingen push), så man ser om Dockerfilen virker.
+# CI/CD for hele monorepoet:
+#   1. test  – bygger løsningen og kører alle NUnit-tests for alle 5 services
+#   2. build – bygger et Docker-image pr. microservice og pusher det til
+#              GitHub Container Registry (ghcr.io) ved push til main.
+# build kører KUN hvis alle tests er grønne.
+# Pull requests bygges og testes kun (ingen push), så man ser om alt virker.
 
-name: Build & push Docker images
+name: CI/CD
 
 on:
   push:
@@ -16,57 +19,32 @@ permissions:
   packages: write
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: user-service
-            project: CarRental.UserService
-          - name: car-service
-            project: CarRental.CarService
-          - name: booking-service
-            project: CarRental.BookingService
-          - name: payment-service
-            project: CarRental.PaymentService
-          - name: notification-service
-            project: CarRental.NotificationService
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Lowercase image prefix
-        # ghcr.io kræver små bogstaver i image-navne
-        run: echo "IMAGE_PREFIX=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
-
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+      - uses: actions/setup-dotnet@v4
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          dotnet-version: '8.0.x'
 
-      - name: Image tags
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_PREFIX }}/${{ matrix.name }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=
-            type=ref,event=pr
+      # Services bruger CarRental.Shared som NuGet-pakke fra local-nuget-feed/,
+      # så den skal bygges først – samme rækkefølge som lokalt (se README).
+      - name: Build CarRental.Shared (local NuGet feed)
+        run: dotnet build CarRental.Shared/CarRental.Shared.csproj -c Release
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ${{ matrix.project }}/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+      - name: Restore
+        run: dotnet restore CarRentalSystem.sln
+
+      - name: Build
+        run: dotnet build CarRentalSystem.sln -c Release --no-restore
+
+      # Kører alle 5 testprojekter. Car-testene starter selv en PostgreSQL
+      # i Docker (Testcontainers) – Docker er installeret på ubuntu-latest.
+      - name: Test
+        run: >
+          dotnet test CarRentalSystem.sln -c Release --no-build
+          --logger "trx"
+          --logger "console;verbosity=normal"
+          --results-directory TestResults
