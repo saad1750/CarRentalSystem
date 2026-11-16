@@ -14,7 +14,7 @@ public class PaymentController : ControllerBase
         _paymentService = paymentService;
     }
 
-    public record ProcessPaymentRequest(Guid BookingId, decimal Amount);
+    public record ProcessPaymentRequest(int BookingId, decimal Amount);
 
     // Krav: betaling online.
     [HttpPost]
@@ -24,8 +24,8 @@ public class PaymentController : ControllerBase
         return Ok(payment);
     }
 
-    [HttpGet("booking/{bookingId:guid}")]
-    public async Task<IActionResult> GetByBooking(Guid bookingId)
+    [HttpGet("booking/{bookingId:int}")]
+    public async Task<IActionResult> GetByBooking(int bookingId)
     {
         var payment = await _paymentService.GetByBookingIdAsync(bookingId);
         return payment is null ? NotFound() : Ok(payment);

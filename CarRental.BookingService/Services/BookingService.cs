@@ -28,7 +28,7 @@ public class BookingService : IBookingService
 
     // Krav: booking af bil — tjekker duplikat, eligibility, tilgængelighed,
     // og reserverer bilen, i den rækkefølge, før noget gemmes.
-    public async Task<BookingResult> CreateBookingAsync(Guid customerId, Guid carId, DateTime startDate, DateTime endDate)
+    public async Task<BookingResult> CreateBookingAsync(int customerId, int carId, DateTime startDate, DateTime endDate)
     {
         if (endDate <= startDate)
             return new BookingResult(false, "End date must be after start date.", null);
@@ -68,7 +68,7 @@ public class BookingService : IBookingService
     }
 
     // Krav: tjek om booking allerede findes (overlap på samme bil).
-    public Task<bool> HasOverlappingBookingAsync(Guid customerId, Guid carId, DateTime startDate, DateTime endDate)
+    public Task<bool> HasOverlappingBookingAsync(int customerId, int carId, DateTime startDate, DateTime endDate)
     {
         return _db.Bookings.AnyAsync(b =>
             b.CarId == carId &&
@@ -77,7 +77,7 @@ public class BookingService : IBookingService
     }
 
     // Krav: booking-historik.
-    public Task<List<Booking>> GetBookingHistoryAsync(Guid customerId)
+    public Task<List<Booking>> GetBookingHistoryAsync(int customerId)
     {
         return _db.Bookings.AsNoTracking()
             .Where(b => b.CustomerId == customerId)
@@ -88,7 +88,7 @@ public class BookingService : IBookingService
     // Kaldes efter vellykket betaling.
     // Idempotent: RabbitMQ leverer "mindst én gang", så samme payment.succeeded kan komme
     // to gange. En allerede bekræftet booking bekræftes ikke igen (og sender ikke en ny mail).
-    public async Task<BookingResult> ConfirmBookingAsync(Guid bookingId)
+    public async Task<BookingResult> ConfirmBookingAsync(int bookingId)
     {
         var booking = await _db.Bookings.FirstOrDefaultAsync(b => b.Id == bookingId);
         if (booking is null)
@@ -119,7 +119,7 @@ public class BookingService : IBookingService
 
     // Krav: fejlet betaling annullerer reservationen.
     // Idempotent: kun en ventende booking kan fejle, så bilen frigives højst én gang.
-    public async Task HandlePaymentFailedAsync(Guid bookingId)
+    public async Task HandlePaymentFailedAsync(int bookingId)
     {
         var booking = await _db.Bookings.FirstOrDefaultAsync(b => b.Id == bookingId);
         if (booking is null || booking.Status != BookingStatus.Pending)
@@ -134,7 +134,7 @@ public class BookingService : IBookingService
 
     // Krav: gratis annullering op til 48 timer før, ellers 25% gebyr,
     // og ingen annullering efter afhentning.
-    public async Task<BookingResult> CancelBookingAsync(Guid bookingId)
+    public async Task<BookingResult> CancelBookingAsync(int bookingId)
     {
         var booking = await _db.Bookings.FirstOrDefaultAsync(b => b.Id == bookingId);
         if (booking is null)
@@ -165,7 +165,7 @@ public class BookingService : IBookingService
     }
 
     // Personale: bekræft afhentning.
-    public async Task<BookingResult> ConfirmPickupAsync(Guid bookingId)
+    public async Task<BookingResult> ConfirmPickupAsync(int bookingId)
     {
         var booking = await _db.Bookings.FirstOrDefaultAsync(b => b.Id == bookingId);
         if (booking is null)
@@ -180,7 +180,7 @@ public class BookingService : IBookingService
     }
 
     // Personale: registrer aflevering.
-    public async Task<BookingResult> RegisterReturnAsync(Guid bookingId)
+    public async Task<BookingResult> RegisterReturnAsync(int bookingId)
     {
         var booking = await _db.Bookings.FirstOrDefaultAsync(b => b.Id == bookingId);
         if (booking is null)

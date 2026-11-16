@@ -6,7 +6,7 @@ namespace CarRental.CarService.Models;
 // Krav: søgning/filtrering, admin flådestyring, pris pr. dag efter biltype.
 public class Car
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public int Id { get; set; }
     public string Make { get; set; } = string.Empty;
     public string Model { get; set; } = string.Empty;
     public CarType Type { get; set; }

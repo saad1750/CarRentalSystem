@@ -13,7 +13,7 @@ public class UserServiceClient : IUserServiceClient
         _httpClient = httpClientFactory.CreateClient("UserService");
     }
 
-    public async Task<CustomerEligibilityDto?> CheckEligibilityAsync(Guid customerId)
+    public async Task<CustomerEligibilityDto?> CheckEligibilityAsync(int customerId)
     {
         var response = await _httpClient.GetAsync($"api/user/{customerId}/eligibility");
 

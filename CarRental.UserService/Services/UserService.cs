@@ -48,14 +48,14 @@ public class UserService : IUserService
             .FirstOrDefaultAsync(u => u.Email == email && u.PasswordHash == hash);
     }
 
-    public Task<Customer?> GetCustomerByIdAsync(Guid customerId) =>
+    public Task<Customer?> GetCustomerByIdAsync(int customerId) =>
         _db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == customerId);
 
     public Task<List<Customer>> GetAllCustomersAsync() =>
         _db.Customers.AsNoTracking().OrderBy(c => c.FullName).ToListAsync();
 
     // Krav: eligibility-tjek som Booking Service kalder før booking oprettes.
-    public async Task<CustomerEligibilityDto> CheckEligibilityAsync(Guid customerId)
+    public async Task<CustomerEligibilityDto> CheckEligibilityAsync(int customerId)
     {
         var customer = await GetCustomerByIdAsync(customerId);
 

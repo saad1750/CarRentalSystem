@@ -13,7 +13,7 @@ public class CarServiceClient : ICarServiceClient
         _httpClient = httpClientFactory.CreateClient("CarService");
     }
 
-    public async Task<CarAvailabilityResponseDto?> CheckAvailabilityAsync(Guid carId, DateTime start, DateTime end)
+    public async Task<CarAvailabilityResponseDto?> CheckAvailabilityAsync(int carId, DateTime start, DateTime end)
     {
         var response = await _httpClient.PostAsJsonAsync("api/car/availability", new CarAvailabilityRequestDto
         {
@@ -27,13 +27,13 @@ public class CarServiceClient : ICarServiceClient
             : null;
     }
 
-    public async Task<bool> TryReserveAsync(Guid carId)
+    public async Task<bool> TryReserveAsync(int carId)
     {
         var response = await _httpClient.PostAsync($"api/car/{carId}/reserve", content: null);
         return response.IsSuccessStatusCode;
     }
 
-    public async Task ReleaseAsync(Guid carId)
+    public async Task ReleaseAsync(int carId)
     {
         await _httpClient.PostAsync($"api/car/{carId}/release", content: null);
     }

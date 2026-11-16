@@ -4,9 +4,9 @@ namespace CarRental.BookingService.Models;
 
 public class Booking
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid CustomerId { get; set; }
-    public Guid CarId { get; set; }
+    public int Id { get; set; }
+    public int CustomerId { get; set; }
+    public int CarId { get; set; }
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
 

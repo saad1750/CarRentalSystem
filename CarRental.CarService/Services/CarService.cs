@@ -38,8 +38,7 @@ public class CarService : ICarService
     // Krav: admin kan tilføje/opdatere/fjerne biler.
     public async Task<Car> AddCarAsync(Car car)
     {
-        if (car.Id == Guid.Empty)
-            car.Id = Guid.NewGuid();
+        car.Id = 0; // databasen tildeler næste ledige id
 
         _db.Cars.Add(car);
         await _db.SaveChangesAsync();
@@ -66,7 +65,7 @@ public class CarService : ICarService
         return existing;
     }
 
-    public async Task<bool> RemoveCarAsync(Guid carId)
+    public async Task<bool> RemoveCarAsync(int carId)
     {
         var deleted = await _db.Cars.Where(c => c.Id == carId).ExecuteDeleteAsync();
         return deleted > 0;
@@ -89,7 +88,7 @@ public class CarService : ICarService
     // Én atomisk UPDATE ... WHERE Status = 'Available' i databasen: kun den første
     // af to samtidige forespørgsler ændrer rækken, den anden rammer 0 rækker.
     // Virker også når der kører flere instanser af Car Service.
-    public async Task<bool> TryReserveAsync(Guid carId)
+    public async Task<bool> TryReserveAsync(int carId)
     {
         var updated = await _db.Cars
             .Where(c => c.Id == carId && c.Status == CarAvailabilityStatus.Available)
@@ -100,7 +99,7 @@ public class CarService : ICarService
 
     // Kaldes af Booking Service ved annullering, fejlet betaling eller aflevering.
     // Biler på værksted røres ikke.
-    public async Task ReleaseAsync(Guid carId)
+    public async Task ReleaseAsync(int carId)
     {
         await _db.Cars
             .Where(c => c.Id == carId && c.Status != CarAvailabilityStatus.InMaintenance)
